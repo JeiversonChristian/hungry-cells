@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hungry Cells - Simulation</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="sim-body">
+    <div class="top-controls">
+        <button id="btn-play-pause" class="btn-secondary">Play</button>
+        <button id="btn-reset" class="btn-secondary">Reset</button>
+        <button id="btn-toggle-config" class="btn-toggle">⚙️ Config</button>
+        <button id="btn-toggle-stats" class="btn-toggle">📊 Stats</button>
+    </div>
+
+    <div id="panel-config" class="panel">
+        <h2>Simulation Settings</h2>
+        <div class="input-group">
+            <label for="input-plants">Plants (Green)</label>
+            <input type="number" id="input-plants" value="100" min="0">
+        </div>
+        <div class="input-group">
+            <label for="input-herbivores">Herbivores (Blue)</label>
+            <input type="number" id="input-herbivores" value="20" min="0">
+        </div>
+        <div class="input-group">
+            <label for="input-predators">Predators (Red)</label>
+            <input type="number" id="input-predators" value="5" min="0">
+        </div>
+    </div>
+
+    <div id="panel-stats" class="panel hidden">
+        <h2>Live Stats</h2>
+        <p>Plants: <span id="stat-plants" style="color: #4CAF50;">0</span></p>
+        <p>Herbivores: <span id="stat-herbivores" style="color: #2196F3;">0</span></p>
+        <p>Predators: <span id="stat-predators" style="color: #F44336;">0</span></p>
+    </div>
+
+    <canvas id="sim-canvas"></canvas>
+
+    <script type="module" src="js/app.js"></script>
+</body>
+</html>
