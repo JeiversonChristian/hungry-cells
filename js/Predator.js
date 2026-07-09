@@ -8,39 +8,72 @@ export class Predator {
         this.speed = 2.5;
         this.visionRadius = 200;
 
-        // Genética da célula: Fator (peso) e Viés
-        this.factor = 0.5 + Math.random(); // Multiplicador entre 0.5 e 1.5
-        this.biasX = (Math.random() - 0.5) * 5; 
-        this.biasY = (Math.random() - 0.5) * 5; 
+        // Parâmetro de Vida/Energia
+        this.energy = 100;
+
+        // GENÉTICA: Pesos que determinam como a célula reage ao ambiente
+        this.w_herbivores = (Math.random() - 0.5) * 2; // Como reage ao centro de massa da presa
+        this.w_center = (Math.random() - 0.5) * 2;     // Como reage ao centro do mundo
+        this.w_energyX = (Math.random() - 0.5) * 0.1;   // Como a própria energia afeta o eixo X
+        this.w_energyY = (Math.random() - 0.5) * 0.1;   // Como a própria energia afeta o eixo Y
+        this.biasX = (Math.random() - 0.5) * 5;        // Tendência de movimento X
+        this.biasY = (Math.random() - 0.5) * 5;        // Tendência de movimento Y
+
+        this.digestionQueue = []; 
     }
 
-    update(plantsCount, herbivoresCount, predatorsCount, relCenterX, relCenterY) {
-        let moveX = 0;
-        let moveY = 0;
+    // Função de Mitose
+    clone() {
+        const child = new Predator(this.x, this.y);
+        child.energy = 100; 
+        
+        const mut = 0.2; 
 
-        if (herbivoresCount > 0) {
-            moveX = relCenterX;
-            moveY = relCenterY;
-        } else {
-            moveX = predatorsCount > 0 ? -relCenterX : relCenterX;
-            moveY = predatorsCount > 0 ? -relCenterY : relCenterY;
+        // O filho herda os genes da mãe com mutação
+        child.w_herbivores = this.w_herbivores + (Math.random() * mut - mut/2);
+        child.w_center = this.w_center + (Math.random() * mut - mut/2);
+        child.w_energyX = this.w_energyX + (Math.random() * mut - mut/2);
+        child.w_energyY = this.w_energyY + (Math.random() * mut - mut/2);
+        child.biasX = this.biasX + (Math.random() * mut - mut/2);
+        child.biasY = this.biasY + (Math.random() * mut - mut/2);
+
+        return child;
+    }
+
+    eatHerbivore() {
+        // Gera de 2 a 5 cocôs por herbívoro comido (refeição maior que a planta)
+        const poopCount = Math.floor(Math.random() * 4) + 2;
+        for (let i = 0; i < poopCount; i++) {
+            this.digestionQueue.push(Math.floor(Math.random() * 120) + 60);
         }
+    }
 
-        // Aplica o fator e o viés únicos da célula
-        moveX = (moveX * this.factor) + this.biasX;
-        moveY = (moveY * this.factor) + this.biasY;
+    update(herbivoresCMX, herbivoresCMY, predatorsCount, relCenterX, relCenterY) {
+        // CÉREBRO DA CÉLULA: Toma a decisão com base na presa (célula azul)
+        let moveX = (herbivoresCMX * this.w_herbivores) + (relCenterX * this.w_center) + (this.energy * this.w_energyX) + this.biasX;
+        let moveY = (herbivoresCMY * this.w_herbivores) + (relCenterY * this.w_center) + (this.energy * this.w_energyY) + this.biasY;
 
-        // Ruído minúsculo
-        moveX += (Math.random() - 0.5);
+        // Ruído minúsculo para desempate
+        moveX += (Math.random() - 0.5) * 0.1;
 
-        // 5 Opções de Decisão
         if (Math.abs(moveX) > Math.abs(moveY)) {
             if (moveX > 0) this.x += this.speed;
             else this.x -= this.speed;
         } else if (Math.abs(moveY) > Math.abs(moveX)) {
             if (moveY > 0) this.y += this.speed;
             else this.y -= this.speed;
+        } 
+
+        // Processa a digestão
+        let poopsDropped = 0;
+        for (let i = this.digestionQueue.length - 1; i >= 0; i--) {
+            this.digestionQueue[i]--;
+            if (this.digestionQueue[i] <= 0) {
+                poopsDropped++;
+                this.digestionQueue.splice(i, 1);
+            }
         }
+        return poopsDropped;
     }
 
     draw(ctx) {

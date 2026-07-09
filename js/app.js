@@ -205,15 +205,69 @@ function simulate() {
     plants = plants.filter(p => !p.eaten);
 
     // Processa os Predadores
-    predators.forEach(p => {
-        const nearbyPlants = grid.getEntitiesInRange(p.x, p.y, p.visionRadius, 'plants');
-        const nearbyHerb = grid.getEntitiesInRange(p.x, p.y, p.visionRadius, 'herbivores');
+    for (let i = predators.length - 1; i >= 0; i--) {
+        const p = predators[i];
+
+        // 1. Metabolismo: predadores gastam um pouquinho mais de energia (0.3) por serem maiores
+        p.energy -= 0.3; 
+        
+        // 2. Morte por fome
+        if (p.energy <= 0) {
+            predators.splice(i, 1);
+            continue; 
+        }
+
+        // 3. Reprodução (Mitose)
+        if (p.energy >= 250) { // O limite é maior (250) pois a refeição de carne enche mais
+            p.energy = 125; 
+            predators.push(p.clone()); 
+        }
+
+        // 4. Visão
+        // Pega as presas, mas ignora as que já foram marcadas como "comidas" por outros predadores neste mesmo frame
+        const nearbyHerb = grid.getEntitiesInRange(p.x, p.y, p.visionRadius, 'herbivores').filter(h => !h.eaten);
         const nearbyPred = grid.getEntitiesInRange(p.x, p.y, p.visionRadius, 'predators');
+
+        // Calcula o vetor direcional (Centro de Massa) para os herbívoros próximos
+        let herbivoresCMX = 0;
+        let herbivoresCMY = 0;
+        if (nearbyHerb.length > 0) {
+            nearbyHerb.forEach(h => {
+                herbivoresCMX += (h.x - p.x);
+                herbivoresCMY += (h.y - p.y);
+            });
+            herbivoresCMX /= nearbyHerb.length;
+            herbivoresCMY /= nearbyHerb.length;
+        }
 
         const relX = worldCenterX - p.x;
         const relY = worldCenterY - p.y;
-        p.update(nearbyPlants.length, nearbyHerb.length, Math.max(0, nearbyPred.length - 1), relX, relY);
-    });
+
+        const poopsToDrop = p.update(herbivoresCMX, herbivoresCMY, nearbyPred.length - 1, relX, relY);
+        
+        for (let j = 0; j < poopsToDrop; j++) {
+            poops.push(new Poop(p.x, p.y));
+        }
+
+        // 5. Lógica de comer os herbívoros
+        nearbyHerb.forEach(h => {
+            const dx = h.x - p.x;
+            const dy = h.y - p.y;
+            const dist = Math.hypot(dx, dy); 
+            
+            // Englobamento completo: dist + raio do herbívoro <= raio do predador
+            if (dist + h.radius <= p.radius) {
+                if (!h.eaten) { 
+                    h.eaten = true;
+                    p.energy += 80; // Herbívoros dão bastante energia
+                    p.eatHerbivore();
+                }
+            }
+        });
+    }
+
+    // Remove os herbívoros que foram comidos pelo predador do mapa
+    herbivores = herbivores.filter(h => !h.eaten);
 
     // Processa a germinação dos cocôs
     for (let i = poops.length - 1; i >= 0; i--) {
