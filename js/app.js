@@ -75,35 +75,108 @@ function updateStats() {
     document.getElementById('stat-predators').innerText = predators.length;
 }
 
-// Desenha tudo na tela
+// Desenha tudo na tela (o update foi removido daqui e levado para o simulate)
 function draw() {
-    // 1. Salva o estado original e limpa a tela inteira (ignorando o zoom atual)
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.restore();
     
-    // 2. Salva o contexto para aplicar a câmera
     ctx.save();
-    
-    // 3. Aplica o deslocamento e o zoom
     ctx.translate(offsetX, offsetY);
     ctx.scale(scale, scale);
 
-    // 4. Desenha as entidades
     plants.forEach(p => p.draw(ctx));
     herbivores.forEach(h => h.draw(ctx));
     predators.forEach(p => p.draw(ctx));
     
-    // 5. Restaura o contexto para não afetar os próximos frames
     ctx.restore();
 }
 
-// O Loop Principal (Otimizado para performance com requestAnimationFrame)
+// OTIMIZAÇÃO: Particionamento Espacial para evitar cálculos O(N^2)
+class SpatialHashGrid {
+    constructor(cellSize) {
+        this.cellSize = cellSize;
+        this.cells = new Map();
+    }
+
+    _getKey(x, y) {
+        return `${Math.floor(x / this.cellSize)},${Math.floor(y / this.cellSize)}`;
+    }
+
+    insert(entity, type) {
+        const key = this._getKey(entity.x, entity.y);
+        if (!this.cells.has(key)) {
+            this.cells.set(key, { plants: [], herbivores: [], predators: [] });
+        }
+        this.cells.get(key)[type].push(entity);
+    }
+
+    // Busca vizinhos apenas no setor da célula e nos 8 setores ao redor
+    getNeighbors(x, y, radius) {
+        const neighbors = { plants: 0, herbivores: 0, predators: 0 };
+        const centerCol = Math.floor(x / this.cellSize);
+        const centerRow = Math.floor(y / this.cellSize);
+
+        for (let col = centerCol - 1; col <= centerCol + 1; col++) {
+            for (let row = centerRow - 1; row <= centerRow + 1; row++) {
+                const key = `${col},${row}`;
+                if (this.cells.has(key)) {
+                    const cell = this.cells.get(key);
+                    
+                    // Conta filtrando pelo raio real (usando teorema de pitágoras rápido)
+                    const countType = (entities) => {
+                        let count = 0;
+                        for (let e of entities) {
+                            const dx = e.x - x;
+                            const dy = e.y - y;
+                            if (dx * dx + dy * dy <= radius * radius) count++;
+                        }
+                        return count;
+                    };
+
+                    neighbors.plants += countType(cell.plants);
+                    neighbors.herbivores += countType(cell.herbivores);
+                    neighbors.predators += countType(cell.predators);
+                }
+            }
+        }
+        return neighbors;
+    }
+}
+
+// O Loop Principal Atualizado
 function simulate() {
     if (isPaused) return;
 
-    // FUTURO: Aqui entrarão as lógicas de movimento, caça e colisão!
+    // 1. Cria a grade espacial (Tamanho do setor = maior raio de visão para segurança)
+    const grid = new SpatialHashGrid(200);
+
+    // 2. Popula a grade com a posição atual de todas as células
+    plants.forEach(p => grid.insert(p, 'plants'));
+    herbivores.forEach(h => grid.insert(h, 'herbivores'));
+    predators.forEach(p => grid.insert(p, 'predators'));
+
+    // Ponto central lógico da tela para passar como parâmetro
+    const centerViewX = (canvas.width / 2 - offsetX) / scale;
+    const centerViewY = (canvas.height / 2 - offsetY) / scale;
+
+    // 3. Calcula as decisões e move os herbívoros
+    herbivores.forEach(h => {
+        const neighbors = grid.getNeighbors(h.x, h.y, h.visionRadius);
+        // Desconta 1 da própria espécie (pois a célula encontra a si mesma no grid)
+        const relX = centerViewX - h.x;
+        const relY = centerViewY - h.y;
+        h.update(neighbors.plants, Math.max(0, neighbors.herbivores - 1), neighbors.predators, relX, relY);
+    });
+
+    // 4. Calcula as decisões e move os predadores
+    predators.forEach(p => {
+        const neighbors = grid.getNeighbors(p.x, p.y, p.visionRadius);
+        const relX = centerViewX - p.x;
+        const relY = centerViewY - p.y;
+        p.update(neighbors.plants, neighbors.herbivores, Math.max(0, neighbors.predators - 1), relX, relY);
+    });
     
     draw();
     updateStats();
