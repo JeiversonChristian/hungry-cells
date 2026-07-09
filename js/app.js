@@ -139,38 +139,67 @@ function simulate() {
     herbivores.forEach(h => grid.insert(h, 'herbivores'));
     predators.forEach(p => grid.insert(p, 'predators'));
 
-    // Processa os Herbívoros (Movimento, Fome e Digestão)
-    herbivores.forEach(h => {
+    // Processa os Herbívoros (Loop reverso para permitir remoção sem quebrar o índice)
+    for (let i = herbivores.length - 1; i >= 0; i--) {
+        const h = herbivores[i];
+
+        // 1. Metabolismo: gasta energia a cada frame
+        h.energy -= 0.2; 
+        
+        // 2. Morte por fome
+        if (h.energy <= 0) {
+            herbivores.splice(i, 1); // Remove a célula morta
+            continue; // Pula o resto da lógica para esta célula
+        }
+
+        // 3. Reprodução (Mitose)
+        if (h.energy >= 200) {
+            h.energy = 100; // A célula mãe gasta energia para se dividir
+            herbivores.push(h.clone()); // Nasce o filho com mutação
+        }
+
+        // 4. Visão
         const nearbyPlants = grid.getEntitiesInRange(h.x, h.y, h.visionRadius, 'plants');
         const nearbyHerb = grid.getEntitiesInRange(h.x, h.y, h.visionRadius, 'herbivores');
         const nearbyPred = grid.getEntitiesInRange(h.x, h.y, h.visionRadius, 'predators');
 
+        // Calcula o vetor direcional (Centro de Massa) para as plantas próximas
+        let plantsCMX = 0;
+        let plantsCMY = 0;
+        if (nearbyPlants.length > 0) {
+            nearbyPlants.forEach(p => {
+                plantsCMX += (p.x - h.x);
+                plantsCMY += (p.y - h.y);
+            });
+            plantsCMX /= nearbyPlants.length; // Tira a média da posição X
+            plantsCMY /= nearbyPlants.length; // Tira a média da posição Y
+        }
+
         const relX = worldCenterX - h.x;
         const relY = worldCenterY - h.y;
 
-        // Atualiza a decisão e coleta se algum cocô foi ejetado
-        const poopsToDrop = h.update(nearbyPlants.length, Math.max(0, nearbyHerb.length - 1), nearbyPred.length, relX, relY);
+        // Atualiza a decisão passando as posições do centro de massa e a energia
+        const poopsToDrop = h.update(plantsCMX, plantsCMY, nearbyHerb.length - 1, nearbyPred.length, relX, relY);
         
-        for (let i = 0; i < poopsToDrop; i++) {
-            // O cocô cai na posição atual do herbívoro (podemos adicionar um pequeno ruído na posição depois se quiser)
+        for (let j = 0; j < poopsToDrop; j++) {
             poops.push(new Poop(h.x, h.y));
         }
 
-        // Lógica de comer as plantas
+        // 5. Lógica de comer as plantas
         nearbyPlants.forEach(p => {
             const dx = p.x - h.x;
             const dy = p.y - h.y;
-            const dist = Math.hypot(dx, dy); // Calcula a distância real
+            const dist = Math.hypot(dx, dy); 
             
-            // Regra do englobamento completo: dist + raio da planta <= raio do herbívoro
             if (dist + p.radius <= h.radius) {
-                if (!p.eaten) { // Flag de segurança para não comer duas vezes simultâneas
+                if (!p.eaten) { 
                     p.eaten = true;
+                    h.energy += 30; // Recupera energia ao comer!
                     h.eatPlant();
                 }
             }
         });
-    });
+    }
 
     // Remove as plantas que foram comidas do mapa
     plants = plants.filter(p => !p.eaten);

@@ -7,44 +7,62 @@ export class Herbivore {
         
         this.speed = 2;
         this.visionRadius = 150;
+        
+        // Parâmetro de Vida/Energia
+        this.energy = 100;
 
-        this.factor = 0.5 + Math.random(); 
-        this.biasX = (Math.random() - 0.5) * 5; 
-        this.biasY = (Math.random() - 0.5) * 5; 
+        // GENÉTICA: Pesos que determinam como a célula reage ao ambiente
+        this.w_plants = (Math.random() - 0.5) * 2;   // Como reage ao centro de massa da comida
+        this.w_center = (Math.random() - 0.5) * 2;   // Como reage ao centro do mundo
+        this.w_energyX = (Math.random() - 0.5) * 0.1; // Como a própria energia afeta o eixo X
+        this.w_energyY = (Math.random() - 0.5) * 0.1; // Como a própria energia afeta o eixo Y
+        this.biasX = (Math.random() - 0.5) * 5;      // Tendência de movimento X
+        this.biasY = (Math.random() - 0.5) * 5;      // Tendência de movimento Y
 
-        // Sistema Digestivo
         this.digestionQueue = []; 
     }
 
-    // Função chamada quando engloba uma planta
+    // Função de Mitose
+    clone() {
+        const child = new Herbivore(this.x, this.y);
+        child.energy = 100; // O filho nasce com metade da energia da mãe
+        
+        const mut = 0.2; // Taxa de mutação (o quanto os genes podem variar do original)
+
+        // O filho herda os genes da mãe, mas com uma pequena mutação aleatória
+        child.w_plants = this.w_plants + (Math.random() * mut - mut/2);
+        child.w_center = this.w_center + (Math.random() * mut - mut/2);
+        child.w_energyX = this.w_energyX + (Math.random() * mut - mut/2);
+        child.w_energyY = this.w_energyY + (Math.random() * mut - mut/2);
+        child.biasX = this.biasX + (Math.random() * mut - mut/2);
+        child.biasY = this.biasY + (Math.random() * mut - mut/2);
+
+        return child;
+    }
+
     eatPlant() {
-        // Gera de 1 a 3 cocôs por planta comida
         const poopCount = Math.floor(Math.random() * 3) + 1;
         for (let i = 0; i < poopCount; i++) {
-            // Tempo de digestão aleatório para cada cocô (ex: ~1 a 3 segundos)
             this.digestionQueue.push(Math.floor(Math.random() * 120) + 60);
         }
     }
 
-    update(plantsCount, herbivoresCount, predatorsCount, relCenterX, relCenterY) {
-        let moveX = 0;
-        let moveY = 0;
+    // Agora recebe as coordenadas do Centro de Massa das plantas
+    update(plantsCMX, plantsCMY, herbivoresCount, predatorsCount, relCenterX, relCenterY) {
+        // CÉREBRO DA CÉLULA: Soma linear dos estímulos multiplicados pela genética
+        let moveX = (plantsCMX * this.w_plants) + (relCenterX * this.w_center) + (this.energy * this.w_energyX) + this.biasX;
+        let moveY = (plantsCMY * this.w_plants) + (relCenterY * this.w_center) + (this.energy * this.w_energyY) + this.biasY;
 
+        // Fuga rudimentar de predadores usando peso fixo (por enquanto)
         if (predatorsCount > 0) {
-            moveX = -relCenterX;
-            moveY = -relCenterY;
-        } else if (plantsCount > 0) {
-            moveX = relCenterX; 
-            moveY = relCenterY;
-        } else {
-            moveX = herbivoresCount % 2 === 0 ? 10 : -10;
-            moveY = herbivoresCount % 3 === 0 ? 10 : -10;
+            moveX += -relCenterX;
+            moveY += -relCenterY;
         }
 
-        moveX = (moveX * this.factor) + this.biasX;
-        moveY = (moveY * this.factor) + this.biasY;
-        moveX += (Math.random() - 0.5);
+        // Ruído minúsculo para desempate
+        moveX += (Math.random() - 0.5) * 0.1;
 
+        // Executa o movimento
         if (Math.abs(moveX) > Math.abs(moveY)) {
             if (moveX > 0) this.x += this.speed;
             else this.x -= this.speed;
@@ -53,13 +71,13 @@ export class Herbivore {
             else this.y -= this.speed;
         } 
 
-        // Processa a digestão e devolve quantos cocôs caíram neste frame
+        // Processa a digestão
         let poopsDropped = 0;
         for (let i = this.digestionQueue.length - 1; i >= 0; i--) {
             this.digestionQueue[i]--;
             if (this.digestionQueue[i] <= 0) {
                 poopsDropped++;
-                this.digestionQueue.splice(i, 1); // Remove da fila
+                this.digestionQueue.splice(i, 1);
             }
         }
         return poopsDropped;
