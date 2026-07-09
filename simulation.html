@@ -7,7 +7,12 @@
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body class="sim-body">
-    <div class="top-controls">
+    <!-- Botão para esconder/mostrar os controles -->
+    <button id="btn-toggle-ui" class="btn-floating">👁️</button>
+
+    <!-- Controles Principais (com ID adicionado e botão Home) -->
+    <div id="main-controls" class="top-controls">
+        <a href="index.html" class="btn-secondary" style="display: flex; align-items: center; justify-content: center;">🏠 Home</a>
         <button id="btn-play-pause" class="btn-secondary">Play</button>
         <button id="btn-reset" class="btn-secondary">Reset</button>
         <button id="btn-toggle-config" class="btn-toggle">⚙️ Config</button>

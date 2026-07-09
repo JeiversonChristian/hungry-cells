@@ -22,6 +22,8 @@ const btnConfig = document.getElementById('btn-toggle-config');
 const btnStats = document.getElementById('btn-toggle-stats');
 const panelConfig = document.getElementById('panel-config');
 const panelStats = document.getElementById('panel-stats');
+const btnToggleUI = document.getElementById('btn-toggle-ui');
+const mainControls = document.getElementById('main-controls');
 
 // Função para ajustar o tamanho do canvas para a tela atual
 function resizeCanvas() {
@@ -116,6 +118,16 @@ btnConfig.addEventListener('click', () => {
 
 btnStats.addEventListener('click', () => {
     panelStats.classList.toggle('hidden');
+});
+
+btnToggleUI.addEventListener('click', () => {
+    // Alterna a visibilidade dos controles principais do topo
+    mainControls.classList.toggle('hidden');
+    
+    // Opcional: Se quiser que o botão de esconder UI também esconda 
+    // os painéis laterais quando ativos, descomente as duas linhas abaixo:
+    // panelConfig.classList.add('hidden');
+    // panelStats.classList.add('hidden');
 });
 
 // A simulação começa em estado inicial, aguardando o usuário
