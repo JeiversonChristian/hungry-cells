@@ -1,6 +1,7 @@
 import { Plant } from './Plant.js';
 import { Herbivore } from './Herbivore.js';
 import { Predator } from './Predator.js';
+import { Poop } from './Poop.js';
 
 // Configuração do Canvas
 const canvas = document.getElementById('sim-canvas');
@@ -10,6 +11,7 @@ const ctx = canvas.getContext('2d');
 let plants = [];
 let herbivores = [];
 let predators = [];
+let poops = [];
 
 // Estado da simulação
 let isPaused = true;
@@ -53,6 +55,7 @@ function initSimulation() {
     plants = [];
     herbivores = [];
     predators = [];
+    poops = [];
 
     // O centro do mundo é fixado no momento do spawn
     worldCenterX = canvas.width / 2;
@@ -83,25 +86,7 @@ function updateStats() {
     document.getElementById('stat-predators').innerText = predators.length;
 }
 
-// Desenha tudo na tela (o update foi removido daqui e levado para o simulate)
-function draw() {
-    ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.restore();
-    
-    ctx.save();
-    ctx.translate(offsetX, offsetY);
-    ctx.scale(scale, scale);
-
-    plants.forEach(p => p.draw(ctx));
-    herbivores.forEach(h => h.draw(ctx));
-    predators.forEach(p => p.draw(ctx));
-    
-    ctx.restore();
-}
-
-// OTIMIZAÇÃO: Particionamento Espacial para evitar cálculos O(N^2)
+// OTIMIZAÇÃO: Particionamento Espacial 
 class SpatialHashGrid {
     constructor(cellSize) {
         this.cellSize = cellSize;
@@ -120,9 +105,9 @@ class SpatialHashGrid {
         this.cells.get(key)[type].push(entity);
     }
 
-    // Busca vizinhos apenas no setor da célula e nos 8 setores ao redor
-    getNeighbors(x, y, radius) {
-        const neighbors = { plants: 0, herbivores: 0, predators: 0 };
+    // Agora retorna as próprias entidades, não apenas a contagem
+    getEntitiesInRange(x, y, radius, type) {
+        const entities = [];
         const centerCol = Math.floor(x / this.cellSize);
         const centerRow = Math.floor(y / this.cellSize);
 
@@ -131,59 +116,108 @@ class SpatialHashGrid {
                 const key = `${col},${row}`;
                 if (this.cells.has(key)) {
                     const cell = this.cells.get(key);
-                    
-                    // Conta filtrando pelo raio real (usando teorema de pitágoras rápido)
-                    const countType = (entities) => {
-                        let count = 0;
-                        for (let e of entities) {
-                            const dx = e.x - x;
-                            const dy = e.y - y;
-                            if (dx * dx + dy * dy <= radius * radius) count++;
+                    for (let e of cell[type]) {
+                        const dx = e.x - x;
+                        const dy = e.y - y;
+                        if (dx * dx + dy * dy <= radius * radius) {
+                            entities.push(e);
                         }
-                        return count;
-                    };
-
-                    neighbors.plants += countType(cell.plants);
-                    neighbors.herbivores += countType(cell.herbivores);
-                    neighbors.predators += countType(cell.predators);
+                    }
                 }
             }
         }
-        return neighbors;
+        return entities;
     }
 }
 
-// O Loop Principal Atualizado
 function simulate() {
     if (isPaused) return;
 
-    // 1. Cria a grade espacial (Tamanho do setor = maior raio de visão para segurança)
     const grid = new SpatialHashGrid(200);
 
-    // 2. Popula a grade com a posição atual de todas as células
     plants.forEach(p => grid.insert(p, 'plants'));
     herbivores.forEach(h => grid.insert(h, 'herbivores'));
     predators.forEach(p => grid.insert(p, 'predators'));
 
-    // 3. Calcula as decisões e move os herbívoros usando o referencial absoluto
+    // Processa os Herbívoros (Movimento, Fome e Digestão)
     herbivores.forEach(h => {
-        const neighbors = grid.getNeighbors(h.x, h.y, h.visionRadius);
+        const nearbyPlants = grid.getEntitiesInRange(h.x, h.y, h.visionRadius, 'plants');
+        const nearbyHerb = grid.getEntitiesInRange(h.x, h.y, h.visionRadius, 'herbivores');
+        const nearbyPred = grid.getEntitiesInRange(h.x, h.y, h.visionRadius, 'predators');
+
         const relX = worldCenterX - h.x;
         const relY = worldCenterY - h.y;
-        h.update(neighbors.plants, Math.max(0, neighbors.herbivores - 1), neighbors.predators, relX, relY);
+
+        // Atualiza a decisão e coleta se algum cocô foi ejetado
+        const poopsToDrop = h.update(nearbyPlants.length, Math.max(0, nearbyHerb.length - 1), nearbyPred.length, relX, relY);
+        
+        for (let i = 0; i < poopsToDrop; i++) {
+            // O cocô cai na posição atual do herbívoro (podemos adicionar um pequeno ruído na posição depois se quiser)
+            poops.push(new Poop(h.x, h.y));
+        }
+
+        // Lógica de comer as plantas
+        nearbyPlants.forEach(p => {
+            const dx = p.x - h.x;
+            const dy = p.y - h.y;
+            const dist = Math.hypot(dx, dy); // Calcula a distância real
+            
+            // Regra do englobamento completo: dist + raio da planta <= raio do herbívoro
+            if (dist + p.radius <= h.radius) {
+                if (!p.eaten) { // Flag de segurança para não comer duas vezes simultâneas
+                    p.eaten = true;
+                    h.eatPlant();
+                }
+            }
+        });
     });
 
-    // 4. Calcula as decisões e move os predadores usando o referencial absoluto
+    // Remove as plantas que foram comidas do mapa
+    plants = plants.filter(p => !p.eaten);
+
+    // Processa os Predadores
     predators.forEach(p => {
-        const neighbors = grid.getNeighbors(p.x, p.y, p.visionRadius);
+        const nearbyPlants = grid.getEntitiesInRange(p.x, p.y, p.visionRadius, 'plants');
+        const nearbyHerb = grid.getEntitiesInRange(p.x, p.y, p.visionRadius, 'herbivores');
+        const nearbyPred = grid.getEntitiesInRange(p.x, p.y, p.visionRadius, 'predators');
+
         const relX = worldCenterX - p.x;
         const relY = worldCenterY - p.y;
-        p.update(neighbors.plants, neighbors.herbivores, Math.max(0, neighbors.predators - 1), relX, relY);
+        p.update(nearbyPlants.length, nearbyHerb.length, Math.max(0, nearbyPred.length - 1), relX, relY);
     });
+
+    // Processa a germinação dos cocôs
+    for (let i = poops.length - 1; i >= 0; i--) {
+        const readyToHatch = poops[i].update();
+        if (readyToHatch) {
+            // Nasce uma nova planta onde estava o cocô
+            plants.push(new Plant(poops[i].x, poops[i].y));
+            poops.splice(i, 1); // Remove o cocô
+        }
+    }
     
     draw();
     updateStats();
     animationFrameId = requestAnimationFrame(simulate);
+}
+
+function draw() {
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
+    
+    ctx.save();
+    ctx.translate(offsetX, offsetY);
+    ctx.scale(scale, scale);
+
+    // Desenhamos os cocôs primeiro, para ficarem debaixo das células
+    poops.forEach(poop => poop.draw(ctx));
+    plants.forEach(p => p.draw(ctx));
+    herbivores.forEach(h => h.draw(ctx));
+    predators.forEach(p => p.draw(ctx));
+    
+    ctx.restore();
 }
 
 // Event Listeners dos Botões
