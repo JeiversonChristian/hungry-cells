@@ -20,6 +20,10 @@ let scale = 1;
 let offsetX = 0;
 let offsetY = 0;
 
+// Variáveis do Mundo (Referencial Absoluto)
+let worldCenterX = 0;
+let worldCenterY = 0;
+
 // Elementos de UI
 const btnPlayPause = document.getElementById('btn-play-pause');
 const btnReset = document.getElementById('btn-reset');
@@ -49,6 +53,10 @@ function initSimulation() {
     plants = [];
     herbivores = [];
     predators = [];
+
+    // O centro do mundo é fixado no momento do spawn
+    worldCenterX = canvas.width / 2;
+    worldCenterY = canvas.height / 2;
 
     const numPlants = parseInt(document.getElementById('input-plants').value) || 0;
     const numHerb = parseInt(document.getElementById('input-herbivores').value) || 0;
@@ -157,24 +165,19 @@ function simulate() {
     herbivores.forEach(h => grid.insert(h, 'herbivores'));
     predators.forEach(p => grid.insert(p, 'predators'));
 
-    // Ponto central lógico da tela para passar como parâmetro
-    const centerViewX = (canvas.width / 2 - offsetX) / scale;
-    const centerViewY = (canvas.height / 2 - offsetY) / scale;
-
-    // 3. Calcula as decisões e move os herbívoros
+    // 3. Calcula as decisões e move os herbívoros usando o referencial absoluto
     herbivores.forEach(h => {
         const neighbors = grid.getNeighbors(h.x, h.y, h.visionRadius);
-        // Desconta 1 da própria espécie (pois a célula encontra a si mesma no grid)
-        const relX = centerViewX - h.x;
-        const relY = centerViewY - h.y;
+        const relX = worldCenterX - h.x;
+        const relY = worldCenterY - h.y;
         h.update(neighbors.plants, Math.max(0, neighbors.herbivores - 1), neighbors.predators, relX, relY);
     });
 
-    // 4. Calcula as decisões e move os predadores
+    // 4. Calcula as decisões e move os predadores usando o referencial absoluto
     predators.forEach(p => {
         const neighbors = grid.getNeighbors(p.x, p.y, p.visionRadius);
-        const relX = centerViewX - p.x;
-        const relY = centerViewY - p.y;
+        const relX = worldCenterX - p.x;
+        const relY = worldCenterY - p.y;
         p.update(neighbors.plants, neighbors.herbivores, Math.max(0, neighbors.predators - 1), relX, relY);
     });
     
