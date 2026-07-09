@@ -15,6 +15,11 @@ let predators = [];
 let isPaused = true;
 let animationFrameId;
 
+// Variáveis de Câmera (Zoom e Pan)
+let scale = 1;
+let offsetX = 0;
+let offsetY = 0;
+
 // Elementos de UI
 const btnPlayPause = document.getElementById('btn-play-pause');
 const btnReset = document.getElementById('btn-reset');
@@ -72,13 +77,26 @@ function updateStats() {
 
 // Desenha tudo na tela
 function draw() {
-    // Limpa o frame anterior (fundo escuro)
+    // 1. Salva o estado original e limpa a tela inteira (ignorando o zoom atual)
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
     
-    // Desenha as entidades
+    // 2. Salva o contexto para aplicar a câmera
+    ctx.save();
+    
+    // 3. Aplica o deslocamento e o zoom
+    ctx.translate(offsetX, offsetY);
+    ctx.scale(scale, scale);
+
+    // 4. Desenha as entidades
     plants.forEach(p => p.draw(ctx));
     herbivores.forEach(h => h.draw(ctx));
     predators.forEach(p => p.draw(ctx));
+    
+    // 5. Restaura o contexto para não afetar os próximos frames
+    ctx.restore();
 }
 
 // O Loop Principal (Otimizado para performance com requestAnimationFrame)
@@ -126,8 +144,42 @@ btnToggleUI.addEventListener('click', () => {
     
     // Opcional: Se quiser que o botão de esconder UI também esconda 
     // os painéis laterais quando ativos, descomente as duas linhas abaixo:
-    // panelConfig.classList.add('hidden');
-    // panelStats.classList.add('hidden');
+    panelConfig.classList.add('hidden');
+    panelStats.classList.add('hidden');
+});
+
+// Event Listener para Zoom com a Roda do Mouse
+canvas.addEventListener('wheel', (e) => {
+    e.preventDefault(); // Previne a rolagem da página inteira
+
+    // Define a intensidade do zoom
+    const zoomSensitivity = 0.1;
+    const zoomIn = e.deltaY < 0;
+    const zoomFactor = zoomIn ? (1 + zoomSensitivity) : (1 - zoomSensitivity);
+
+    // Pega a posição do mouse relativa ao canvas
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+
+    // Calcula a posição lógica do mouse (no mundo da simulação) antes do zoom
+    const logicalX = (mouseX - offsetX) / scale;
+    const logicalY = (mouseY - offsetY) / scale;
+
+    // Atualiza a escala
+    scale *= zoomFactor;
+
+    // Limita o zoom máximo e mínimo para a tela não sumir
+    scale = Math.max(0.1, Math.min(scale, 10)); 
+
+    // Recalcula o offset para que o mouse continue apontando para o mesmo ponto lógico
+    offsetX = mouseX - logicalX * scale;
+    offsetY = mouseY - logicalY * scale;
+
+    // Se a simulação estiver pausada, forçamos um redesenho para o usuário ver o zoom acontecendo na hora
+    if (isPaused) {
+        draw();
+    }
 });
 
 // A simulação começa em estado inicial, aguardando o usuário
